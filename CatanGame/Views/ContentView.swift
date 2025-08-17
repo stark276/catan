@@ -5,7 +5,7 @@ import SwiftUI
 /// messages.  Interaction with the board is handled via tap
 /// gestures on intersections and roads.
 public struct ContentView: View {
-    @StateObject private var gameState = GameState(playerCount: 4)
+    @ObservedObject var gameState: GameState
 
     public var body: some View {
         VStack(spacing: 8) {
@@ -119,7 +119,7 @@ public struct ContentView: View {
 // compile in this environment but are included for completeness.
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView()
+        ContentView(gameState: GameState())
             .previewLayout(.sizeThatFits)
     }
 }
