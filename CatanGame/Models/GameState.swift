@@ -63,28 +63,32 @@ public final class GameState: ObservableObject {
 
     // MARK: - Initialiser
 
-    /// Create a new game state with a standard Catan board and the
-    /// specified number of players.  Player names and colours are
-    /// assigned automatically.
-    /// - Parameter playerCount: Number of players (typically 3–4).  If
-    ///   the value is outside the range 2–4, it will be clamped.
-    public init(playerCount: Int = 4) {
+    /// Create a new game state with a standard Catan board.  You may
+    /// optionally supply player names; otherwise defaults are used.
+    /// - Parameters:
+    ///   - playerCount: Number of players (typically 3–4).  Values
+    ///     outside 2–4 are clamped.
+    ///   - playerNames: Optional list of names for each player.
+    ///     Only the first `playerCount` names are used.
+    public init(playerCount: Int = 4, playerNames: [String]? = nil) {
         let count = max(2, min(playerCount, 4))
-        self.setupPlayers(count: count)
+        self.setupPlayers(count: count, names: playerNames)
         self.generateBoard()
     }
 
     // MARK: - Setup Methods
 
     /// Create the players array with default colours and names.  The
-    /// colours are chosen to contrast on the board.  If more than four
-    /// players are requested, colours will wrap around.
-    private func setupPlayers(count: Int) {
+    /// colours are chosen to contrast on the board.  If custom names
+    /// are supplied, they override the defaults.
+    private func setupPlayers(count: Int, names: [String]? = nil) {
         let defaultNames = ["Red", "Blue", "Green", "Orange"]
         let defaultColors: [Color] = [.red, .blue, .green, .orange]
+        let suppliedNames = names ?? []
         var players: [Player] = []
         for i in 0..<count {
-            let name = i < defaultNames.count ? defaultNames[i] : "Player \(i+1)"
+            let provided = i < suppliedNames.count ? suppliedNames[i].trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            let name = provided.isEmpty ? (i < defaultNames.count ? defaultNames[i] : "Player \(i+1)") : provided
             let color = i < defaultColors.count ? defaultColors[i] : Color(hue: Double(i) / Double(count), saturation: 0.7, brightness: 0.8)
             players.append(Player(id: i, name: name, color: color))
         }
