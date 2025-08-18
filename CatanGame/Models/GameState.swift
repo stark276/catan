@@ -104,10 +104,11 @@ public final class GameState: ObservableObject {
     private func setupPlayers(count: Int, names: [String]? = nil) {
         let defaultNames = ["Red", "Blue", "Green", "Orange"]
         let defaultColors: [Color] = [.red, .blue, .green, .orange]
-        let suppliedNames = names ?? []
+        let trimmedNames = (names ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+
         var players: [Player] = []
         for i in 0..<count {
-            let provided = i < suppliedNames.count ? suppliedNames[i].trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            let provided = i < trimmedNames.count ? trimmedNames[i] : ""
             let name = provided.isEmpty ? (i < defaultNames.count ? defaultNames[i] : "Player \(i+1)") : provided
             let color = i < defaultColors.count ? defaultColors[i] : Color(
                 hue: Double(i) / Double(count),
