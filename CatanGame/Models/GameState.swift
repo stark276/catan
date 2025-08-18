@@ -104,17 +104,7 @@ public final class GameState: ObservableObject {
     private func setupPlayers(count: Int, names: [String]? = nil) {
         let defaultNames = ["Red", "Blue", "Green", "Orange"]
         let defaultColors: [Color] = [.red, .blue, .green, .orange]
-        let trimmedNames = (names ?? []).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-
-        var players: [Player] = []
-        for i in 0..<count {
-            let provided = i < trimmedNames.count ? trimmedNames[i] : ""
-            let name = provided.isEmpty ? (i < defaultNames.count ? defaultNames[i] : "Player \(i+1)") : provided
-            let color = i < defaultColors.count ? defaultColors[i] : Color(
-                hue: Double(i) / Double(count),
-                saturation: 0.7,
-                brightness: 0.8
-            )
+      main
             players.append(Player(id: i, name: name, color: color))
         }
         self.players = players
@@ -464,15 +454,7 @@ public final class GameState: ObservableObject {
                 lastMessage = "Not enough resources to build a settlement."
                 return
             }
-            // must touch one of the player's roads
-            let connectsToRoad = roads.contains { road in
-                road.occupant == playerId &&
-                    (road.from == intersectionIndex || road.to == intersectionIndex)
-            }
-            guard connectsToRoad else {
-                lastMessage = "Settlement must connect to your road."
-                return
-            }
+main
             payResources(playerId: playerId, cost: cost)
         }
         // place settlement
