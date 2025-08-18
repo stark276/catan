@@ -109,7 +109,11 @@ public final class GameState: ObservableObject {
         for i in 0..<count {
             let provided = i < suppliedNames.count ? suppliedNames[i].trimmingCharacters(in: .whitespacesAndNewlines) : ""
             let name = provided.isEmpty ? (i < defaultNames.count ? defaultNames[i] : "Player \(i+1)") : provided
-            let color = i < defaultColors.count ? defaultColors[i] : Color(hue: Double(i) / Double(count), saturation: 0.7, brightness: 0.8)
+            let color = i < defaultColors.count ? defaultColors[i] : Color(
+                hue: Double(i) / Double(count),
+                saturation: 0.7,
+                brightness: 0.8
+            )
             players.append(Player(id: i, name: name, color: color))
         }
         self.players = players
