@@ -28,6 +28,11 @@ turn management and scoring — inside a fully native iOS application.
   matching numbers.
 * Turn tracker and resource/victory point display for up to four
   players.
+* Initial setup phase requiring each player to place two free settlement/road pairs before play.
+* Random starting player selection kicks off the first turn.
+* Per-player 100-second countdown with automatic turn advancement.
+* Player sign-in screen to enter custom names.
+* Colored house icons mark settlements instead of generic dots.
 
 ## Running the App
 

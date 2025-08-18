@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Renders an intersection (vertex) on the board.  Depending on
-/// occupancy it shows an empty outline, a coloured circle for a
+/// occupancy it shows an empty outline, a coloured house icon for a
 /// settlement, or a filled square for a city.  The `tapAction` is
 /// invoked when the intersection is tapped, enabling building actions.
 public struct IntersectionView: View {
@@ -22,9 +22,11 @@ public struct IntersectionView: View {
             if let occupant = occupant, let color = playerColor {
                 switch occupant {
                 case .settlement:
-                    Circle()
-                        .fill(color)
-                        .frame(width: radius * 0.5, height: radius * 0.5)
+                    Image(systemName: "house.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .foregroundColor(color)
+                        .frame(width: radius * 0.6, height: radius * 0.6)
                 case .city:
                     RoundedRectangle(cornerRadius: radius * 0.1)
                         .fill(color)
