@@ -22,7 +22,15 @@ public struct ContentView: View {
             // Board area
             GeometryReader { geometry in
                 ZStack {
-                    // Roads
+                    // Tiles drawn first so they don't block road taps
+                    ForEach(gameState.tiles) { tile in
+                        let centre = gameState.position(forTile: tile, in: geometry.size)
+                        let radius = gameState.hexScale(in: geometry.size) * 0.95 // small shrink to avoid overlaps
+                        HexTileView(tile: tile, radius: radius)
+                            .position(x: centre.x, y: centre.y)
+                            .allowsHitTesting(false)
+                    }
+                    // Roads overlay tiles for better tap handling
                     ForEach(gameState.roads) { road in
                         RoadView(start: gameState.position(forIntersection: road.from, in: geometry.size),
                                  end: gameState.position(forIntersection: road.to, in: geometry.size),
@@ -31,13 +39,6 @@ public struct ContentView: View {
                                  tapAction: {
                                     gameState.placeRoad(at: road.id)
                                  })
-                    }
-                    // Tiles
-                    ForEach(gameState.tiles) { tile in
-                        let centre = gameState.position(forTile: tile, in: geometry.size)
-                        let radius = gameState.hexScale(in: geometry.size) * 0.95 // small shrink to avoid overlaps
-                        HexTileView(tile: tile, radius: radius)
-                            .position(x: centre.x, y: centre.y)
                     }
                     // Intersections
                     ForEach(gameState.intersections) { intersection in
