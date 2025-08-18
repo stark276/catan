@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 /// Central game model controlling board state, players and game flow.  This
 /// class is responsible for generating the hexagonal map, computing
@@ -26,9 +27,19 @@ public final class GameState: ObservableObject {
 
     /// Index of the current player in the players array.  The current
     /// player may perform actions such as building and rolling dice.
-//    @Published public private(set) var currentPlayerIndex: Int = 0
     @Published public var currentPlayerIndex: Int = 0
 
+    /// Indicates whether the game is in the initial setup phase where players
+    /// place their first settlements and roads for free.
+    @Published public var setupPhase: Bool = true
+
+    /// Tracks the required action during setup: players must place a settlement
+    /// then a road before ending their turn.
+    public enum SetupStage { case settlement, road, done }
+    @Published public var setupStage: SetupStage = .settlement
+
+    /// Remaining time for the current player's turn in seconds.
+    @Published public var timeRemaining: Int = 100
 
     /// The most recent dice roll (sum of two six‑sided dice).  A value
     /// of 7 indicates the robber was rolled.  A value of 0 indicates no
@@ -61,30 +72,43 @@ public final class GameState: ObservableObject {
     /// dice rolls.
     private var tileCornerIndices: [[Int]] = []
 
+    /// Count of initial settlement/road pairs each player has placed.
+    private var setupPairsBuilt: [Int] = []
+
+    /// Timer handling the countdown for each player's turn.
+    private var turnTimer: Timer?
+
     // MARK: - Initialiser
 
-    /// Create a new game state with a standard Catan board and the
-    /// specified number of players.  Player names and colours are
-    /// assigned automatically.
-    /// - Parameter playerCount: Number of players (typically 3–4).  If
-    ///   the value is outside the range 2–4, it will be clamped.
-    public init(playerCount: Int = 4) {
+    /// Create a new game state with a standard Catan board.  You may
+    /// optionally supply player names; otherwise defaults are used.
+    /// - Parameters:
+    ///   - playerCount: Number of players (typically 3–4).  Values
+    ///     outside 2–4 are clamped.
+    ///   - playerNames: Optional list of names for each player.
+    ///     Only the first `playerCount` names are used.
+    public init(playerCount: Int = 4, playerNames: [String]? = nil) {
         let count = max(2, min(playerCount, 4))
-        self.setupPlayers(count: count)
+        self.setupPlayers(count: count, names: playerNames)
         self.generateBoard()
+        self.setupPairsBuilt = Array(repeating: 0, count: count)
+        self.currentPlayerIndex = Int.random(in: 0..<count)
+        self.startTurnTimer()
     }
 
     // MARK: - Setup Methods
 
     /// Create the players array with default colours and names.  The
-    /// colours are chosen to contrast on the board.  If more than four
-    /// players are requested, colours will wrap around.
-    private func setupPlayers(count: Int) {
+    /// colours are chosen to contrast on the board.  If custom names
+    /// are supplied, they override the defaults.
+    private func setupPlayers(count: Int, names: [String]? = nil) {
         let defaultNames = ["Red", "Blue", "Green", "Orange"]
         let defaultColors: [Color] = [.red, .blue, .green, .orange]
+        let suppliedNames = names ?? []
         var players: [Player] = []
         for i in 0..<count {
-            let name = i < defaultNames.count ? defaultNames[i] : "Player \(i+1)"
+            let provided = i < suppliedNames.count ? suppliedNames[i].trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            let name = provided.isEmpty ? (i < defaultNames.count ? defaultNames[i] : "Player \(i+1)") : provided
             let color = i < defaultColors.count ? defaultColors[i] : Color(hue: Double(i) / Double(count), saturation: 0.7, brightness: 0.8)
             players.append(Player(id: i, name: name, color: color))
         }
@@ -324,13 +348,47 @@ public final class GameState: ObservableObject {
 
     // MARK: - Game Logic
 
-    /// Advance to the next player.  Wraps around to zero.
+    /// Start or reset the countdown timer for the current player's turn.
+    private func startTurnTimer() {
+        timeRemaining = 100
+        turnTimer?.invalidate()
+        turnTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            if self.timeRemaining > 0 {
+                self.timeRemaining -= 1
+            } else {
+                self.lastMessage = "Time's up for \(self.players[self.currentPlayerIndex].name)."
+                self.advancePlayer()
+            }
+        }
+    }
+
+    /// End the current player's turn and move to the next one. During the setup
+    /// phase players must place a settlement and road before ending.
+    public func endTurn() {
+        if setupPhase && setupStage != .done {
+            lastMessage = "Place a settlement and road before ending your turn."
+            return
+        }
+        advancePlayer()
+    }
+
+    /// Advance to the next player, updating setup state and restarting the timer.
     private func advancePlayer() {
+        if setupPhase && setupPairsBuilt.allSatisfy({ $0 >= 2 }) {
+            setupPhase = false
+        }
         currentPlayerIndex = (currentPlayerIndex + 1) % players.count
+        setupStage = setupPhase ? .settlement : .done
+        startTurnTimer()
     }
 
     /// Roll two six‑sided dice and distribute resources accordingly.
     public func rollDice() {
+        guard !setupPhase else {
+            lastMessage = "Finish initial placements before rolling the dice."
+            return
+        }
         let dice = Int.random(in: 1...6) + Int.random(in: 1...6)
         diceResult = dice
         if dice == 7 {
@@ -389,21 +447,40 @@ public final class GameState: ObservableObject {
                 return
             }
         }
-        // cost: one each of lumber, brick, grain, wool
-        let cost: [ResourceType: Int] = [.lumber: 1, .brick: 1, .grain: 1, .wool: 1]
         let playerId = currentPlayerIndex
-        guard canAfford(playerId: playerId, cost: cost) else {
-            lastMessage = "Not enough resources to build a settlement."
-            return
+        if setupPhase {
+            guard setupStage == .settlement else {
+                lastMessage = "Place your road before another settlement."
+                return
+            }
+        } else {
+            let cost: [ResourceType: Int] = [.lumber: 1, .brick: 1, .grain: 1, .wool: 1]
+            guard canAfford(playerId: playerId, cost: cost) else {
+                lastMessage = "Not enough resources to build a settlement."
+                return
+            }
+            // must touch one of the player's roads
+            let connectsToRoad = roads.contains { road in
+                road.occupant == playerId &&
+                    (road.from == intersectionIndex || road.to == intersectionIndex)
+            }
+            guard connectsToRoad else {
+                lastMessage = "Settlement must connect to your road."
+                return
+            }
+            payResources(playerId: playerId, cost: cost)
         }
-        payResources(playerId: playerId, cost: cost)
         // place settlement
         intersection.occupant = .settlement(player: playerId)
         intersections[intersectionIndex] = intersection
         players[playerId].settlements += 1
         players[playerId].victoryPoints += 1
-        lastMessage = "\(players[playerId].name) built a settlement."
-        // end of build does not automatically advance; call `advancePlayer()` externally when finishing turn.
+        if setupPhase {
+            setupStage = .road
+            lastMessage = "\(players[playerId].name) placed an initial settlement."
+        } else {
+            lastMessage = "\(players[playerId].name) built a settlement."
+        }
     }
 
     /// Attempt to upgrade a settlement to a city at the specified intersection.  The
@@ -451,11 +528,11 @@ public final class GameState: ObservableObject {
             return
         }
         let playerId = currentPlayerIndex
-        // road cost: one lumber and one brick
-        let cost: [ResourceType: Int] = [.lumber: 1, .brick: 1]
-        guard canAfford(playerId: playerId, cost: cost) else {
-            lastMessage = "Not enough resources to build a road."
-            return
+        if setupPhase {
+            guard setupStage == .road else {
+                lastMessage = "Place a settlement first."
+                return
+            }
         }
         // Optionally enforce adjacency: road must touch at least one intersection owned by player or a road belonging to player.
         // Here we implement a simple rule: you can build a road if at least one of its endpoints is adjacent to a
@@ -487,16 +564,34 @@ public final class GameState: ObservableObject {
             }
             return false
         }()
-        // If the player has no existing structures, allow building the first road anywhere
         let playerHasNoRoads = !roads.contains(where: { $0.occupant == playerId })
-        if !touchesPlayerStructure && !playerHasNoRoads {
-            lastMessage = "Road must connect to your existing road or settlement."
-            return
+        if setupPhase {
+            if !touchesPlayerStructure {
+                lastMessage = "Initial road must connect to your settlement."
+                return
+            }
+        } else {
+            if !touchesPlayerStructure && !playerHasNoRoads {
+                lastMessage = "Road must connect to your existing road or settlement."
+                return
+            }
+            // road cost: one lumber and one brick
+            let cost: [ResourceType: Int] = [.lumber: 1, .brick: 1]
+            guard canAfford(playerId: playerId, cost: cost) else {
+                lastMessage = "Not enough resources to build a road."
+                return
+            }
+            payResources(playerId: playerId, cost: cost)
         }
-        payResources(playerId: playerId, cost: cost)
         roads[roadIndex].occupant = playerId
         players[playerId].roads += 1
-        lastMessage = "\(players[playerId].name) built a road."
+        if setupPhase {
+            setupPairsBuilt[playerId] += 1
+            setupStage = .done
+            lastMessage = "\(players[playerId].name) placed an initial road."
+        } else {
+            lastMessage = "\(players[playerId].name) built a road."
+        }
     }
 
     // MARK: - Resource Management Helpers
