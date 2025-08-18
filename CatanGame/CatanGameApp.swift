@@ -5,9 +5,17 @@ import SwiftUI
 /// containing the `ContentView`.
 @main
 struct CatanGameApp: App {
+    @State private var gameState: GameState? = nil
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if let gameState = gameState {
+                ContentView(gameState: gameState)
+            } else {
+                PlayerSetupView { names in
+                    gameState = GameState(playerCount: 4, playerNames: names)
+                }
+            }
         }
     }
 }

@@ -5,7 +5,7 @@ import SwiftUI
 /// messages.  Interaction with the board is handled via tap
 /// gestures on intersections and roads.
 public struct ContentView: View {
-    @StateObject private var gameState = GameState(playerCount: 4)
+    @ObservedObject var gameState: GameState
 
     public var body: some View {
         VStack(spacing: 8) {
@@ -22,7 +22,15 @@ public struct ContentView: View {
             // Board area
             GeometryReader { geometry in
                 ZStack {
-                    // Roads
+                    // Tiles drawn first so they don't block road taps
+                    ForEach(gameState.tiles) { tile in
+                        let centre = gameState.position(forTile: tile, in: geometry.size)
+                        let radius = gameState.hexScale(in: geometry.size) * 0.95 // small shrink to avoid overlaps
+                        HexTileView(tile: tile, radius: radius)
+                            .position(x: centre.x, y: centre.y)
+                            .allowsHitTesting(false)
+                    }
+                    // Roads overlay tiles for better tap handling
                     ForEach(gameState.roads) { road in
                         RoadView(start: gameState.position(forIntersection: road.from, in: geometry.size),
                                  end: gameState.position(forIntersection: road.to, in: geometry.size),
@@ -31,13 +39,6 @@ public struct ContentView: View {
                                  tapAction: {
                                     gameState.placeRoad(at: road.id)
                                  })
-                    }
-                    // Tiles
-                    ForEach(gameState.tiles) { tile in
-                        let centre = gameState.position(forTile: tile, in: geometry.size)
-                        let radius = gameState.hexScale(in: geometry.size) * 0.95 // small shrink to avoid overlaps
-                        HexTileView(tile: tile, radius: radius)
-                            .position(x: centre.x, y: centre.y)
                     }
                     // Intersections
                     ForEach(gameState.intersections) { intersection in
@@ -94,15 +95,20 @@ public struct ContentView: View {
                     .padding(8)
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.blue.opacity(0.2)))
                 }
+                .disabled(gameState.setupPhase)
+
                 Button(action: {
-                    // End turn advances to next player
-                    gameState.currentPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.count
+                    gameState.endTurn()
                 }) {
                     Text("End Turn")
                         .font(.headline)
                         .padding(8)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color.green.opacity(0.2)))
                 }
+                .disabled(gameState.setupPhase && gameState.setupStage != .done)
+
+                Text("Time: \(gameState.timeRemaining)s")
+                    .font(.headline)
             }
             .padding(.bottom, 4)
             // Last message
@@ -119,7 +125,7 @@ public struct ContentView: View {
 // compile in this environment but are included for completeness.
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
-        ContentView()
+        ContentView(gameState: GameState())
             .previewLayout(.sizeThatFits)
     }
 }
